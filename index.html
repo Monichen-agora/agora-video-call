@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agora Premium Call</title>
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.22.0.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0e14;
+            --surface: #161b22;
+            --primary: #2f81f7;
+            --danger: #f85149;
+            --text: #c9d1d9;
+            --text-bright: #ffffff;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .setup-card {
+            background: var(--surface);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid #30363d;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        h1 { color: var(--text-bright); margin-bottom: 24px; font-size: 24px; }
+        .field { text-align: left; margin-bottom: 16px; }
+        label { display: block; font-size: 12px; margin-bottom: 6px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: white;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus { border-color: var(--primary); }
+        .join-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: filter 0.2s;
+        }
+        .join-btn:hover { filter: brightness(1.1); }
+        #video-stage {
+            position: fixed;
+            inset: 0;
+            display: none;
+            background: black;
+        }
+        #remote-video { width: 100%; height: 100%; object-fit: cover; }
+        #local-video {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 280px;
+            aspect-ratio: 16/9;
+            background: #161b22;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #30363d;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            z-index: 10;
+        }
+        .ui-overlay {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 16px;
+            background: rgba(22, 27, 34, 0.8);
+            padding: 12px 24px;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            border: 1px solid #30363d;
+            z-index: 20;
+        }
+        .btn-round {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background: #30363d;
+            color: white;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+        .btn-round:hover { background: #484f58; }
+        .btn-round.off { background: var(--danger); }
+        .btn-end { background: var(--danger); }
+        .btn-end:hover { background: #da3633; }
+    </style>
+</head>
+<body>
+    <div id="setup" class="setup-card">
+        <h1>Agora Video</h1>
+        <div class="field">
+            <label>App ID</label>
+            <input type="text" id="appid" placeholder="Enter App ID">
+        </div>
+        <div class="field">
+            <label>Channel</label>
+            <input type="text" id="channel" placeholder="Enter Channel Name">
+        </div>
+        <div class="field">
+            <label>Token</label>
+            <input type="text" id="token" placeholder="Optional">
+        </div>
+        <button class="join-btn" onclick="startCall()">Join Meeting</button>
+    </div>
+
+    <div id="video-stage">
+        <div id="remote-video"></div>
+        <div id="local-video"></div>
+        <div class="ui-overlay">
+            <button id="mic-btn" class="btn-round" onclick="toggleMic()"><i class="fas fa-microphone"></i></button>
+            <button id="cam-btn" class="btn-round" onclick="toggleCam()"><i class="fas fa-video"></i></button>
+            <button class="btn-round btn-end" onclick="endCall()"><i class="fas fa-phone-slash"></i></button>
+        </div>
+    </div>
+
+    <script>
+        let client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        let localTracks = { video: null, audio: null };
+        let state = { mic: true, cam: true };
+
+        async function startCall() {
+            const appid = document.getElementById('appid').value;
+            const channel = document.getElementById('channel').value;
+            const token = document.getElementById('token').value || null;
+
+            if(!appid || !channel) return alert("Fill required fields");
+
+            try {
+                await client.join(appid, channel, token);
+                localTracks.audio = await AgoraRTC.createMicrophoneAudioTrack();
+                localTracks.video = await AgoraRTC.createCameraVideoTrack();
+
+                document.getElementById('setup').style.display = 'none';
+                document.getElementById('video-stage').style.display = 'block';
+
+                localTracks.video.play('local-video');
+                await client.publish(Object.values(localTracks));
+
+                client.on("user-published", async (user, mediaType) => {
+                    await client.subscribe(user, mediaType);
+                    if (mediaType === "video") user.videoTrack.play("remote-video");
+                    if (mediaType === "audio") user.audioTrack.play();
+                });
+
+                client.on("user-unpublished", user => {
+                    document.getElementById("remote-video").innerHTML = "";
+                });
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        async function toggleMic() {
+            state.mic = !state.mic;
+            await localTracks.audio.setEnabled(state.mic);
+            document.getElementById('mic-btn').classList.toggle('off', !state.mic);
+            document.getElementById('mic-btn').innerHTML = state.mic ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
+        }
+
+        async function toggleCam() {
+            state.cam = !state.cam;
+            await localTracks.video.setEnabled(state.cam);
+            document.getElementById('cam-btn').classList.toggle('off', !state.cam);
+            document.getElementById('cam-btn').innerHTML = state.cam ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
+        }
+
+        async function endCall() {
+            for (let track of Object.values(localTracks)) {
+                if (track) { track.stop(); track.close(); }
+            }
+            await client.leave();
+            location.reload();
+        }
+    </script>
+</body>
+</html>
